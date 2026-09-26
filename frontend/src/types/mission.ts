@@ -3,12 +3,22 @@ export type MissionPurpose = '正射' | '倾斜' | '带状';
 
 export const MISSION_PURPOSES: MissionPurpose[] = ['正射', '倾斜', '带状'];
 
-export type MissionStatus = '规划中' | '待飞行' | '已飞行' | '已归档';
+export type MissionStatus = '规划中' | '待飞行' | '已飞行' | '已验收' | '已归档';
 
-export const MISSION_STATUSES: MissionStatus[] = ['规划中', '待飞行', '已飞行', '已归档'];
+export const MISSION_STATUSES: MissionStatus[] = ['规划中', '待飞行', '已飞行', '已验收', '已归档'];
 
 /** 经纬度点 */
 export type LngLat = [number, number];
+
+/** 验收记录（验收通过时写入，归档后随任务封存） */
+export interface AcceptanceRecord {
+  /** 验收通过时间 */
+  acceptedAt: number;
+  /** 验收时影像总数 */
+  totalImages: number;
+  /** 验收时合格影像数 */
+  qualifiedImages: number;
+}
 
 /** 航拍任务 */
 export interface Mission {
@@ -34,6 +44,8 @@ export interface Mission {
   flightDate: string;
   pilot: string;
   status: MissionStatus;
+  /** 验收记录（仅「已验收 / 已归档」任务存在） */
+  acceptance?: AcceptanceRecord;
   createdAt: number;
 }
 

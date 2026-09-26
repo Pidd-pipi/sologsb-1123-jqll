@@ -41,6 +41,8 @@ export default function WaypointTable() {
   const clearMission = useWaypointStore((s) => s.removeByMission);
 
   const mission = missions.find((m) => m.id === id);
+  /** 已归档任务：航点仅供查看 */
+  const archived = mission?.status === '已归档';
   const rows = useMemo(
     () => waypoints.filter((w) => w.missionId === id).sort((a, b) => a.seq - b.seq),
     [waypoints, id],
@@ -102,28 +104,28 @@ export default function WaypointTable() {
       title: '相对航高 m',
       width: 140,
       render: (_: unknown, row: Waypoint) => (
-        <InputNumber size="small" min={20} max={600} value={row.altitude} onChange={(v) => update(row.id, { altitude: Number(v ?? 0) })} />
+        <InputNumber size="small" min={20} max={600} disabled={archived} value={row.altitude} onChange={(v) => update(row.id, { altitude: Number(v ?? 0) })} />
       ),
     },
     {
       title: '航速 m/s',
       width: 120,
       render: (_: unknown, row: Waypoint) => (
-        <InputNumber size="small" min={1} max={25} step={0.5} value={row.speed} onChange={(v) => update(row.id, { speed: Number(v ?? 0) })} />
+        <InputNumber size="small" min={1} max={25} step={0.5} disabled={archived} value={row.speed} onChange={(v) => update(row.id, { speed: Number(v ?? 0) })} />
       ),
     },
     {
       title: '航向 °',
       width: 120,
       render: (_: unknown, row: Waypoint) => (
-        <InputNumber size="small" min={0} max={360} value={row.heading} onChange={(v) => update(row.id, { heading: Number(v ?? 0) })} />
+        <InputNumber size="small" min={0} max={360} disabled={archived} value={row.heading} onChange={(v) => update(row.id, { heading: Number(v ?? 0) })} />
       ),
     },
     {
       title: '云台俯仰 °',
       width: 130,
       render: (_: unknown, row: Waypoint) => (
-        <InputNumber size="small" min={-90} max={30} value={row.gimbalPitch} onChange={(v) => update(row.id, { gimbalPitch: Number(v ?? 0) })} />
+        <InputNumber size="small" min={-90} max={30} disabled={archived} value={row.gimbalPitch} onChange={(v) => update(row.id, { gimbalPitch: Number(v ?? 0) })} />
       ),
     },
     {
@@ -134,6 +136,7 @@ export default function WaypointTable() {
           size="small"
           style={{ width: 100 }}
           value={row.action}
+          disabled={archived}
           onChange={(v) => update(row.id, { action: v as WaypointAction })}
           options={WAYPOINT_ACTIONS.map((a) => ({ value: a, label: a }))}
         />
@@ -143,7 +146,7 @@ export default function WaypointTable() {
       title: '悬停 s',
       width: 110,
       render: (_: unknown, row: Waypoint) => (
-        <InputNumber size="small" min={0} max={300} value={row.hoverSec} onChange={(v) => update(row.id, { hoverSec: Number(v ?? 0) })} />
+        <InputNumber size="small" min={0} max={300} disabled={archived} value={row.hoverSec} onChange={(v) => update(row.id, { hoverSec: Number(v ?? 0) })} />
       ),
     },
     {
@@ -169,19 +172,21 @@ export default function WaypointTable() {
       width: 210,
       render: (_: unknown, row: Waypoint, index: number) => (
         <Space size={4}>
-          <Button size="small" disabled={index === 0} onClick={() => move(row.id, 'up')}>
+          <Button size="small" disabled={archived || index === 0} onClick={() => move(row.id, 'up')}>
             上移
           </Button>
-          <Button size="small" disabled={index === rows.length - 1} onClick={() => move(row.id, 'down')}>
+          <Button size="small" disabled={archived || index === rows.length - 1} onClick={() => move(row.id, 'down')}>
             下移
           </Button>
           <span
-            draggable
-            title="拖拽到目标行可交换顺序"
-            style={{ cursor: 'grab', color: '#97a0ad' }}
+            draggable={!archived}
+            title={archived ? '已归档，顺序不可调整' : '拖拽到目标行可交换顺序'}
+            style={{ cursor: archived ? 'not-allowed' : 'grab', color: '#97a0ad' }}
             onDragStart={() => setPreviewId(row.id)}
             onDragOver={(e) => e.preventDefault()}
-            onDrop={() => reorder(row.id, previewId)}
+            onDrop={() => {
+              if (!archived) reorder(row.id, previewId);
+            }}
           >
             ⣿
           </span>
@@ -196,7 +201,7 @@ export default function WaypointTable() {
           <Button size="small" onClick={() => setPreviewId(row.id)}>
             预览视场
           </Button>
-          <Button size="small" danger onClick={() => remove(row.id)}>
+          <Button size="small" danger disabled={archived} onClick={() => remove(row.id)}>
             删除
           </Button>
         </Space>
@@ -228,10 +233,14 @@ export default function WaypointTable() {
         <Button type="link">
           <Link to={`/missions/${mission.id}/assets`}>成果编目</Link>
         </Button>
-        <Button danger size="small" onClick={() => clearMission(mission.id)}>
+        <Button danger size="small" disabled={archived} onClick={() => clearMission(mission.id)}>
           清空本任务航点
         </Button>
       </Space>
+
+      {archived ? (
+        <Alert type="info" showIcon message="任务已归档：航点仅供查看，导入、改高、换序与删除均已锁定。" />
+      ) : null}
 
       {toast ? <Alert type="success" showIcon message={toast} closable onClose={() => setToast('')} /> : null}
       {error ? <Alert type="error" showIcon message={error} closable onClose={() => setError('')} /> : null}
@@ -243,20 +252,21 @@ export default function WaypointTable() {
               rows={6}
               placeholder={'每行一个点，例如：\n116.391200,39.907500\n116.393000,39.906800,150'}
               value={pasteText}
+              disabled={archived}
               onChange={(e) => setPasteText(e.target.value)}
             />
             <Space style={{ marginTop: 8 }}>
-              <Button type="primary" icon={<ImportOutlined />} onClick={importPaste}>
+              <Button type="primary" icon={<ImportOutlined />} disabled={archived} onClick={importPaste}>
                 导入航点
               </Button>
-              <Button onClick={() => setPasteText('')}>清空文本</Button>
+              <Button onClick={() => setPasteText('')} disabled={archived}>清空文本</Button>
             </Space>
           </Card>
           <Card size="small" title="批量修改高度" style={{ marginTop: 12 }}>
             <Space>
-              <InputNumber min={20} max={600} step={5} value={batchAltitude} onChange={(v) => setBatchAltitude(Number(v ?? 0))} />
+              <InputNumber min={20} max={600} step={5} disabled={archived} value={batchAltitude} onChange={(v) => setBatchAltitude(Number(v ?? 0))} />
               <span>m</span>
-              <Button icon={<ThunderboltOutlined />} onClick={applyBatchAltitude} disabled={rows.length === 0}>
+              <Button icon={<ThunderboltOutlined />} onClick={applyBatchAltitude} disabled={archived || rows.length === 0}>
                 应用到全部航点
               </Button>
             </Space>

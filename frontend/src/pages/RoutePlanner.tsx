@@ -25,6 +25,8 @@ export default function RoutePlanner() {
   const waypoints = useWaypointStore((s) => s.items);
   const addWaypoint = useWaypointStore((s) => s.add);
   const mission = missions.find((m) => m.id === id);
+  /** 已归档任务：航线参数与航点仅供查看 */
+  const archived = mission?.status === '已归档';
   const missionWaypoints = useMemo(
     () => waypoints.filter((w) => w.missionId === id).sort((a, b) => a.seq - b.seq),
     [waypoints, id],
@@ -58,6 +60,10 @@ export default function RoutePlanner() {
 
   const onSave = async () => {
     if (!mission) return;
+    if (archived) {
+      setError('任务已归档，航线参数仅供查看，不可再保存');
+      return;
+    }
     const line: FlightLine = {
       id: newId('line'),
       missionId: mission.id,
@@ -79,6 +85,10 @@ export default function RoutePlanner() {
 
   const pickPoint = async (lng: number, lat: number) => {
     if (!mission) return;
+    if (archived) {
+      setError('任务已归档，航点仅供查看，不可新增');
+      return;
+    }
     if (missionWaypoints.length >= 60) {
       setError('单任务航点上限为 60 个，请拆分架次');
       return;
@@ -145,6 +155,9 @@ export default function RoutePlanner() {
       </Space>
 
       {error ? <Alert type="error" showIcon message={error} closable onClose={() => setError('')} /> : null}
+      {archived ? (
+        <Alert type="info" showIcon message="任务已归档：航线参数与航点均已封存，仅供查看。" />
+      ) : null}
 
       <Row gutter={14}>
         <Col span={15}>
@@ -197,6 +210,7 @@ export default function RoutePlanner() {
             metrics={metrics}
             onSave={onSave}
             savedText={savedText}
+            readOnly={archived}
           />
         </Col>
       </Row>

@@ -23,7 +23,7 @@ import { useWaypointStore } from '../stores/waypointStore';
 import { useAssetStore } from '../stores/assetStore';
 import { useMissionFilter } from '../hooks/useMissionFilter';
 import MissionCard from '../components/common/MissionCard';
-import { MISSION_PURPOSES, MISSION_STATUSES, type LngLat, type MissionDraft, type MissionPurpose, type MissionStatus } from '../types/mission';
+import { MISSION_PURPOSES, MISSION_STATUSES, type LngLat, type Mission, type MissionDraft, type MissionPurpose, type MissionStatus } from '../types/mission';
 
 const DEFAULT_POLYGON: LngLat[] = [
   [116.3912, 39.9075],
@@ -51,6 +51,7 @@ export default function MissionList() {
   const navigate = useNavigate();
   const missions = useMissionStore((s) => s.items);
   const addMission = useMissionStore((s) => s.add);
+  const archiveMission = useMissionStore((s) => s.archive);
   const waypoints = useWaypointStore((s) => s.items);
   const assets = useAssetStore((s) => s.items);
   const { filters, patch, reset, result, options } = useMissionFilter();
@@ -58,6 +59,7 @@ export default function MissionList() {
   const [open, setOpen] = useState(false);
   const [error, setError] = useState('');
   const [toast, setToast] = useState('');
+  const [archiving, setArchiving] = useState<Mission | null>(null);
   const [polygonText, setPolygonText] = useState(polygonToText(DEFAULT_POLYGON));
   const [draft, setDraft] = useState<Omit<MissionDraft, 'areaPolygon'>>({
     missionNo: '',
@@ -115,6 +117,17 @@ export default function MissionList() {
     setError('');
     setToast(`已建立任务「${created.missionNo}」，测区 ${polygon.length} 个边界点`);
     setDraft({ ...draft, missionNo: '', name: '', areaName: '' });
+  };
+
+  const confirmArchive = async () => {
+    if (!archiving) return;
+    const ok = await archiveMission(archiving.id);
+    if (ok) {
+      setToast(`任务「${archiving.missionNo}」已归档：验收时间、影像总数与合格数已封存，相关数据转为只读`);
+    } else {
+      setToast('仅「已验收」任务可归档');
+    }
+    setArchiving(null);
   };
 
   return (
@@ -239,6 +252,11 @@ export default function MissionList() {
                     <Button size="small" type="link" onClick={() => navigate('/settings/camera')}>
                       相机预设
                     </Button>
+                    {row.mission.status === '已验收' ? (
+                      <Button size="small" type="link" style={{ color: '#722ed1' }} onClick={() => setArchiving(row.mission)}>
+                        归档
+                      </Button>
+                    ) : null}
                   </Space>
                 }
               />
@@ -336,6 +354,32 @@ export default function MissionList() {
             <Input.TextArea rows={5} value={polygonText} onChange={(e) => setPolygonText(e.target.value)} />
           </div>
         </Space>
+      </Modal>
+      <Modal
+        open={!!archiving}
+        title={`归档任务 ${archiving?.missionNo ?? ''}`}
+        onCancel={() => setArchiving(null)}
+        onOk={confirmArchive}
+        okText="确认归档"
+        cancelText="取消"
+        okButtonProps={{ disabled: !archiving?.acceptance }}
+      >
+        {archiving?.acceptance ? (
+          <Space direction="vertical" size={8} style={{ width: '100%', marginTop: 8 }}>
+            <Typography.Text>
+              验收时间：{new Date(archiving.acceptance.acceptedAt).toLocaleString('zh-CN')}
+            </Typography.Text>
+            <Typography.Text>影像总数：{archiving.acceptance.totalImages} 张</Typography.Text>
+            <Typography.Text>合格数量：{archiving.acceptance.qualifiedImages} 张</Typography.Text>
+            <Alert
+              type="warning"
+              showIcon
+              message="归档后航点、航线、影像质量与补拍清单将全部转为只读，仅可查看。"
+            />
+          </Space>
+        ) : (
+          <Alert style={{ marginTop: 8 }} type="error" showIcon message="该任务缺少验收记录，无法归档" />
+        )}
       </Modal>
     </Space>
   );

@@ -3,10 +3,11 @@ import type { CameraPreset, Mission } from '../types/mission';
 import type { Waypoint } from '../types/waypoint';
 import type { FlightLine } from '../types/flightline';
 import { makeThumbDataUrl, type AssetThumb, type ImageAsset } from '../types/imageasset';
+import type { ReshootItem } from '../types/reshoot';
 import { newId } from './id';
 
 export const DB_NAME = 'gbdronemap';
-export const DB_VERSION = 2;
+export const DB_VERSION = 3;
 export const LS_VERSION_KEY = 'gbdronemap:db-version';
 
 class DroneMapDB extends Dexie {
@@ -16,6 +17,7 @@ class DroneMapDB extends Dexie {
   assets!: Table<ImageAsset, string>;
   thumbs!: Table<AssetThumb, string>;
   presets!: Table<CameraPreset, string>;
+  reshoots!: Table<ReshootItem, string>;
 
   constructor() {
     super(DB_NAME);
@@ -54,6 +56,31 @@ class DroneMapDB extends Dexie {
             if (row.updatedAt === undefined) row.updatedAt = Date.now();
             if (row.batteryCount === undefined) row.batteryCount = 1;
           });
+      });
+    this.version(3)
+      .stores({
+        missions: 'id, missionNo, areaName, droneModel, flightDate, status, purpose, createdAt',
+        waypoints: 'id, missionId, seq, action, altitude',
+        lines: 'id, missionId, lineNo, updatedAt',
+        assets: 'id, missionId, imageNo, quality, shotAt',
+        thumbs: 'id, missionId',
+        presets: 'id, name, cameraModel',
+        reshoots: 'id, missionId, assetId, imageNo',
+      })
+      .upgrade(async (tx) => {
+        // 为存量模糊 / 过曝影像补建补拍清单条目，保留质量原因
+        const badAssets = (await tx.table('assets').toArray()).filter(
+          (a: ImageAsset) => a.quality === '模糊' || a.quality === '过曝',
+        );
+        const rows: ReshootItem[] = badAssets.map((a: ImageAsset) => ({
+          id: newId('reshoot'),
+          missionId: a.missionId,
+          assetId: a.id,
+          imageNo: a.imageNo,
+          reason: a.quality,
+          createdAt: Date.now(),
+        }));
+        if (rows.length > 0) await tx.table('reshoots').bulkPut(rows);
       });
   }
 }
@@ -257,6 +284,18 @@ export async function ensureSeedData(): Promise<void> {
     thumbs.push({ id, missionId: missionA, dataUrl: makeThumbDataUrl(`IMG_${1001 + index}`, quality, lng, lat) });
   });
 
+  // 示范补拍清单：模糊 / 过曝影像按片号进入清单并保留质量原因
+  const reshoots: ReshootItem[] = assets
+    .filter((a) => a.quality !== '合格')
+    .map((a) => ({
+      id: newId('reshoot'),
+      missionId: a.missionId,
+      assetId: a.id,
+      imageNo: a.imageNo,
+      reason: a.quality,
+      createdAt: now - 29 * day,
+    }));
+
   const presets: CameraPreset[] = [
     {
       id: newId('preset'),
@@ -287,13 +326,14 @@ export async function ensureSeedData(): Promise<void> {
     },
   ];
 
-  // 六张表超过 Dexie 位置参数上限，改用数组形式声明事务范围
-  await db.transaction('rw', [db.missions, db.waypoints, db.lines, db.assets, db.thumbs, db.presets], async () => {
+  // 七张表超过 Dexie 位置参数上限，改用数组形式声明事务范围
+  await db.transaction('rw', [db.missions, db.waypoints, db.lines, db.assets, db.thumbs, db.presets, db.reshoots], async () => {
     await db.missions.bulkPut(missions);
     await db.waypoints.bulkPut(waypoints);
     await db.lines.bulkPut(lines);
     await db.assets.bulkPut(assets);
     await db.thumbs.bulkPut(thumbs);
     await db.presets.bulkPut(presets);
+    await db.reshoots.bulkPut(reshoots);
   });
 }

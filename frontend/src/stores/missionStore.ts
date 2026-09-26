@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { db } from '../utils/db';
 import { newId } from '../utils/id';
-import type { CameraPreset, Mission, MissionDraft, MissionStatus } from '../types/mission';
+import type { AcceptanceRecord, CameraPreset, Mission, MissionDraft, MissionStatus } from '../types/mission';
 
 interface MissionState {
   items: Mission[];
@@ -11,6 +11,10 @@ interface MissionState {
   add: (draft: MissionDraft) => Promise<Mission>;
   update: (id: string, patch: Partial<Mission>) => Promise<void>;
   setStatus: (id: string, status: MissionStatus) => Promise<void>;
+  /** 验收通过：写入验收时间、影像总数与合格数 */
+  accept: (id: string, record: AcceptanceRecord) => Promise<void>;
+  /** 归档：仅「已验收」任务可归档，归档后任务数据只读 */
+  archive: (id: string) => Promise<boolean>;
   applyPreset: (missionId: string, presetId: string) => Promise<void>;
   addPreset: (draft: Omit<CameraPreset, 'id'>) => Promise<CameraPreset>;
   removePreset: (id: string) => Promise<void>;
@@ -38,6 +42,15 @@ export const useMissionStore = create<MissionState>((set, get) => ({
   },
   async setStatus(id, status) {
     await get().update(id, { status });
+  },
+  async accept(id, record) {
+    await get().update(id, { status: '已验收', acceptance: record });
+  },
+  async archive(id) {
+    const mission = get().items.find((it) => it.id === id);
+    if (!mission || mission.status !== '已验收' || !mission.acceptance) return false;
+    await get().update(id, { status: '已归档' });
+    return true;
   },
   async applyPreset(missionId, presetId) {
     const preset = get().presets.find((p) => p.id === presetId);

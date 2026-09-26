@@ -67,7 +67,7 @@ sologsb-1123/
         ├── index.css
         ├── vite-env.d.ts
         ├── router/index.tsx
-        ├── types/{mission,waypoint,flightline,imageasset}.ts
+        ├── types/{mission,waypoint,flightline,imageasset,reshoot}.ts
         ├── stores/{mission,waypoint,asset}Store.ts
         ├── components/common/{AmapRouteView,OverlapCalcPanel,AssetGrid,MissionCard}.tsx
         ├── hooks/{useMissionFilter,useRouteMetrics}.ts
@@ -79,10 +79,10 @@ sologsb-1123/
 
 | 路由 | 页面 | 消费模型 |
 | --- | --- | --- |
-| `/missions` | 任务台账：按测区/机型/飞行日期区间/状态筛选，显示航线数、预计张数与成果条目数 | Mission |
+| `/missions` | 任务台账：按测区/机型/飞行日期区间/状态筛选，显示航线数、预计张数与成果条目数；已验收任务可在此归档 | Mission |
 | `/missions/:id/route` | 航线规划主视图：地图/网格绘制测区与航点折线，右侧参数面板改航高/航速/重叠率，实时回算 GSD、航线间距、预计张数与耗时 | Mission、Waypoint、FlightLine |
 | `/missions/:id/waypoints` | 航点明细：经纬度粘贴导入、批量改高度、上下移与拖拽换序、单点视场预览 | Waypoint |
-| `/missions/:id/assets` | 成果影像编目：卡片格子列出片号/缩略图/GSD/质量，多选标记质量、定位到图、导出清单 | ImageAsset |
+| `/missions/:id/assets` | 成果影像编目：卡片格子列出片号/缩略图/GSD/质量，多选标记质量、定位到图、导出清单；模糊/过曝片号自动进入补拍清单（保留质量原因），航线参数已保存且全部合格可通过验收 | ImageAsset、Reshoot |
 | `/settings/camera` | 相机与传感器参数预设管理，选定预设后带入任务的焦距/像元/传感器 | CameraPreset、Mission |
 
 `/` 重定向到 `/missions`，未匹配路由同样兜底到 `/missions`。
@@ -95,10 +95,17 @@ sologsb-1123/
 - **预计张数** = Σ(每条航带长度 / 拍照间隔 + 1)；**预计耗时** = (总航程 / 航速 + 转弯与悬停附加) / 60；**电池组数** 按 20 min 有效续航向上取整
 - **测区面积**：经纬度投影到米制后用鞋带公式；**航带路径长度**：逐段球面近似距离累加
 
+## 验收与归档流程
+
+- **补拍清单**：成果编目页把影像标记为「模糊 / 过曝」时，片号自动进入补拍清单并保留质量原因；改回「合格」或删除条目即移出清单。
+- **验收**：任务的航线参数已保存、且全部影像合格（补拍清单清空）后，方可在成果编目页点击「通过验收」。验收通过即写入验收时间、影像总数与合格数，任务转为「已验收」，影像质量与补拍清单随即封存。
+- **归档**：「已验收」任务在任务台账出现「归档」入口，确认框中回显验收时间、影像总数与合格数；归档后任务转为「已归档」，航点、航线、影像质量与补拍清单全部只读，仅供查看。
+
 ## 数据存储说明
 
-- 数据库名 `gbdronemap`，当前结构版本 **v2**（`localStorage['gbdronemap:db-version']` 记录）。
-- 六张表：`missions`（任务）、`waypoints`（航点）、`lines`（航线参数）、`assets`（成果影像条目）、`thumbs`（**缩略图单独建表**，dataUrl）、`presets`（相机预设）。
+- 数据库名 `gbdronemap`，当前结构版本 **v3**（`localStorage['gbdronemap:db-version']` 记录）。
+- 七张表：`missions`（任务，含验收记录 `acceptance`）、`waypoints`（航点）、`lines`（航线参数）、`assets`（成果影像条目）、`thumbs`（**缩略图单独建表**，dataUrl）、`presets`（相机预设）、`reshoots`（补拍清单：片号 + 质量原因）。
 - v1 → v2 迁移：为老任务补 `areaPolygon`/传感器默认值，为航线补 `updatedAt`/`batteryCount`，并新增索引。
+- v2 → v3 迁移：新增 `reshoots` 表，并为存量模糊 / 过曝影像补建补拍清单条目（保留质量原因）。
 - 容器无状态、不挂载命名卷；清空站点数据即回到初始示范数据。
-- 首次打开灌入 2 个示范任务、5 个航点、2 条航线参数、6 条成果影像条目（含缩略图）与 3 套相机预设。
+- 首次打开灌入 2 个示范任务、5 个航点、2 条航线参数、6 条成果影像条目（含缩略图）、2 条补拍清单条目与 3 套相机预设。
