@@ -17,7 +17,7 @@ import {
   Tag,
   Typography,
 } from 'antd';
-import { PlusOutlined, ReloadOutlined } from '@ant-design/icons';
+import { PlusOutlined, ReloadOutlined, LockOutlined } from '@ant-design/icons';
 import { useMissionStore } from '../stores/missionStore';
 import { useWaypointStore } from '../stores/waypointStore';
 import { useAssetStore } from '../stores/assetStore';
@@ -51,6 +51,7 @@ export default function MissionList() {
   const navigate = useNavigate();
   const missions = useMissionStore((s) => s.items);
   const addMission = useMissionStore((s) => s.add);
+  const archiveMission = useMissionStore((s) => s.archive);
   const waypoints = useWaypointStore((s) => s.items);
   const assets = useAssetStore((s) => s.items);
   const { filters, patch, reset, result, options } = useMissionFilter();
@@ -239,6 +240,35 @@ export default function MissionList() {
                     <Button size="small" type="link" onClick={() => navigate('/settings/camera')}>
                       相机预设
                     </Button>
+                    {row.mission.status === '已验收' ? (
+                      <Button
+                        size="small"
+                        type="link"
+                        onClick={() =>
+                          Modal.confirm({
+                            title: `归档任务 ${row.mission.missionNo}？`,
+                            content: `验收时间 ${
+                              row.mission.acceptedAt ? new Date(row.mission.acceptedAt).toLocaleString('zh-CN') : '—'
+                            }，影像总数 ${row.mission.acceptedTotalCount ?? 0} 张、合格 ${
+                              row.mission.acceptedQualifiedCount ?? 0
+                            } 张。归档后航点、航线、影像质量与补拍清单只能查看。`,
+                            okText: '确认归档',
+                            cancelText: '取消',
+                            onOk: async () => {
+                              await archiveMission(row.mission.id);
+                              setToast(`任务「${row.mission.missionNo}」已归档`);
+                            },
+                          })
+                        }
+                      >
+                        归档
+                      </Button>
+                    ) : null}
+                    {row.mission.status === '已归档' ? (
+                      <Button size="small" type="link" icon={<LockOutlined />} disabled>
+                        已归档·只读
+                      </Button>
+                    ) : null}
                   </Space>
                 }
               />
@@ -328,7 +358,7 @@ export default function MissionList() {
               style={{ width: 130 }}
               value={draft.status}
               onChange={(v) => setDraft({ ...draft, status: v as MissionStatus })}
-              options={MISSION_STATUSES.map((s) => ({ value: s, label: s }))}
+              options={MISSION_STATUSES.filter((s) => s !== '已验收' && s !== '已归档').map((s) => ({ value: s, label: s }))}
             />
           </Space>
           <div>

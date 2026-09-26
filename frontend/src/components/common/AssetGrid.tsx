@@ -10,6 +10,8 @@ export interface AssetGridProps {
   onToggleAll?: (ids: string[]) => void;
   onLocate?: (asset: ImageAsset) => void;
   emptyText?: string;
+  /** 只读模式（任务已归档）：隐藏多选框 */
+  readOnly?: boolean;
 }
 
 const QUALITY_COLOR: Record<ImageQuality, string> = {
@@ -30,6 +32,7 @@ export default function AssetGrid({
   onToggleAll,
   onLocate,
   emptyText = '暂无成果影像条目',
+  readOnly = false,
 }: AssetGridProps) {
   if (assets.length === 0) {
     return <Empty description={emptyText} />;
@@ -39,16 +42,18 @@ export default function AssetGrid({
 
   return (
     <div data-testid="asset-grid">
-      <Space style={{ marginBottom: 10 }} size={10} wrap>
-        <Checkbox
-          checked={allSelected}
-          indeterminate={selectedIds.length > 0 && !allSelected}
-          onChange={() => onToggleAll?.(allSelected ? [] : assets.map((a) => a.id))}
-        >
-          全选（{assets.length} 张）
-        </Checkbox>
-        <Typography.Text type="secondary">已选 {selectedIds.length} 张</Typography.Text>
-      </Space>
+      {readOnly ? null : (
+        <Space style={{ marginBottom: 10 }} size={10} wrap>
+          <Checkbox
+            checked={allSelected}
+            indeterminate={selectedIds.length > 0 && !allSelected}
+            onChange={() => onToggleAll?.(allSelected ? [] : assets.map((a) => a.id))}
+          >
+            全选（{assets.length} 张）
+          </Checkbox>
+          <Typography.Text type="secondary">已选 {selectedIds.length} 张</Typography.Text>
+        </Space>
+      )}
       <div
         style={{
           display: 'grid',
@@ -73,7 +78,7 @@ export default function AssetGrid({
                   style={{ width: '100%', display: 'block', borderRadius: 4, background: '#eef2f6' }}
                 />
                 <div style={{ position: 'absolute', top: 4, left: 4 }}>
-                  <Checkbox checked={selected} onChange={() => onToggle(asset.id)} />
+                  {readOnly ? null : <Checkbox checked={selected} onChange={() => onToggle(asset.id)} />}
                 </div>
                 <div style={{ position: 'absolute', top: 4, right: 4 }}>
                   <Tag color={QUALITY_COLOR[asset.quality]}>{asset.quality}</Tag>

@@ -17,6 +17,7 @@ const STATUS_COLOR: Record<string, string> = {
   规划中: 'default',
   待飞行: 'blue',
   已飞行: 'green',
+  已验收: 'geekblue',
   已归档: 'purple',
 };
 
@@ -51,6 +52,19 @@ export default function MissionCard({ mission, waypointCount, assetCount, lineCo
         <Descriptions.Item label="传感器">
           {mission.sensorWidth}×{mission.sensorHeight} mm / f{mission.focalLength} mm / {mission.pixelSize} μm
         </Descriptions.Item>
+        {mission.status === '已验收' || mission.status === '已归档' ? (
+          <Descriptions.Item label="验收归档" span={2}>
+            <Space size={6} wrap>
+              <Typography.Text type="secondary">
+                验收 {mission.acceptedAt ? new Date(mission.acceptedAt).toLocaleString('zh-CN') : '—'} · 共{' '}
+                {mission.acceptedTotalCount ?? 0} 张 / 合格 {mission.acceptedQualifiedCount ?? 0} 张
+              </Typography.Text>
+              {mission.archivedAt ? (
+                <Typography.Text type="secondary">归档 {new Date(mission.archivedAt).toLocaleString('zh-CN')}</Typography.Text>
+              ) : null}
+            </Space>
+          </Descriptions.Item>
+        ) : null}
       </Descriptions>
       <Typography.Text type="secondary" style={{ fontSize: 12 }}>
         地图视图：{hasAmapKey() ? '高德 JS API' : '本地 SVG 网格（未配置 VITE_AMAP_KEY）'}

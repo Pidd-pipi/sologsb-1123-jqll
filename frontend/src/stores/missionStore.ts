@@ -11,6 +11,10 @@ interface MissionState {
   add: (draft: MissionDraft) => Promise<Mission>;
   update: (id: string, patch: Partial<Mission>) => Promise<void>;
   setStatus: (id: string, status: MissionStatus) => Promise<void>;
+  /** 验收通过：记录验收时间与当时的影像总数、合格数，任务置为已验收 */
+  accept: (id: string, totalCount: number, qualifiedCount: number) => Promise<void>;
+  /** 归档：仅已验收任务可归档，记录归档时间，之后航点/航线/影像/补拍均只读 */
+  archive: (id: string) => Promise<void>;
   applyPreset: (missionId: string, presetId: string) => Promise<void>;
   addPreset: (draft: Omit<CameraPreset, 'id'>) => Promise<CameraPreset>;
   removePreset: (id: string) => Promise<void>;
@@ -39,6 +43,20 @@ export const useMissionStore = create<MissionState>((set, get) => ({
   async setStatus(id, status) {
     await get().update(id, { status });
   },
+  async accept(id, totalCount, qualifiedCount) {
+    const acceptedAt = Date.now();
+    await get().update(id, {
+      status: '已验收',
+      acceptedAt,
+      acceptedTotalCount: totalCount,
+      acceptedQualifiedCount: qualifiedCount,
+    });
+  },
+  async archive(id) {
+    const mission = get().items.find((m) => m.id === id);
+    if (!mission || mission.status !== '已验收') return;
+    await get().update(id, { status: '已归档', archivedAt: Date.now() });
+  },
   async applyPreset(missionId, presetId) {
     const preset = get().presets.find((p) => p.id === presetId);
     if (!preset) return;
@@ -62,6 +80,8 @@ export const useMissionStore = create<MissionState>((set, get) => ({
   },
   async remove(id) {
     await db.missions.delete(id);
+    // 级联清理该任务的补拍清单，避免遗留悬空条目
+    await db.reshoots.where('missionId').equals(id).delete();
     set({ items: get().items.filter((it) => it.id !== id) });
   },
 }));

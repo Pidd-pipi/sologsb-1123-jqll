@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { db } from '../utils/db';
 import { newId } from '../utils/id';
 import { makeThumbDataUrl, type AssetThumb, type ImageAsset, type ImageAssetDraft, type ImageQuality } from '../types/imageasset';
+import { useReshootStore } from './reshootStore';
 
 interface AssetState {
   items: ImageAsset[];
@@ -56,6 +57,11 @@ export const useAssetStore = create<AssetState>((set, get) => ({
       await db.assets.update(id, { quality });
     }
     set({ items: get().items.map((it) => (ids.includes(it.id) ? { ...it, quality } : it)) });
+    // 质量结论变化后同步补拍清单：模糊/过曝按片号入池并保留原因，改判合格自动销项
+    const missionIds = new Set(get().items.filter((it) => ids.includes(it.id)).map((it) => it.missionId));
+    for (const missionId of missionIds) {
+      await useReshootStore.getState().reconcileMission(missionId);
+    }
   },
   async removeMany(ids) {
     await db.assets.bulkDelete(ids);

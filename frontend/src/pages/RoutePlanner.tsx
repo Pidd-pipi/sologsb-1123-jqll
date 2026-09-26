@@ -31,14 +31,17 @@ export default function RoutePlanner() {
   );
 
   const [params, setParams] = useState<RouteParams>({ ...DEFAULT_ROUTE_PARAMS });
+  const [savedLine, setSavedLine] = useState<FlightLine | undefined>(undefined);
   const [savedText, setSavedText] = useState('');
   const [error, setError] = useState('');
   const metrics = useRouteMetrics(id, params);
+  const readOnly = mission?.status === '已归档';
 
   useEffect(() => {
     if (!id) return;
     void loadFlightLine(id).then((line) => {
       if (!line) return;
+      setSavedLine(line);
       setParams((prev) => ({
         ...prev,
         altitude: missionWaypoints[0]?.altitude ?? prev.altitude,
@@ -59,7 +62,7 @@ export default function RoutePlanner() {
   const onSave = async () => {
     if (!mission) return;
     const line: FlightLine = {
-      id: newId('line'),
+      id: savedLine?.id ?? newId('line'),
       missionId: mission.id,
       lineNo: 1,
       spacing: metrics.spacing,
@@ -74,11 +77,16 @@ export default function RoutePlanner() {
       updatedAt: Date.now(),
     };
     await saveFlightLine(line);
+    setSavedLine(line);
     setSavedText(`已保存 ${new Date(line.updatedAt).toLocaleString('zh-CN')}`);
   };
 
   const pickPoint = async (lng: number, lat: number) => {
     if (!mission) return;
+    if (readOnly) {
+      setError('任务已归档，航线与航点只能查看');
+      return;
+    }
     if (missionWaypoints.length >= 60) {
       setError('单任务航点上限为 60 个，请拆分架次');
       return;
@@ -145,6 +153,7 @@ export default function RoutePlanner() {
       </Space>
 
       {error ? <Alert type="error" showIcon message={error} closable onClose={() => setError('')} /> : null}
+      {readOnly ? <Alert type="info" showIcon message="任务已归档，航线参数与航点只能查看，不能再修改或新增。" /> : null}
 
       <Row gutter={14}>
         <Col span={15}>
@@ -154,7 +163,7 @@ export default function RoutePlanner() {
               waypoints={missionWaypoints}
               altitude={params.altitude}
               height={440}
-              onPickPoint={pickPoint}
+              onPickPoint={readOnly ? undefined : pickPoint}
             />
           </Card>
           <Card size="small" title="航线参数明细" style={{ marginTop: 14 }}>
@@ -197,6 +206,7 @@ export default function RoutePlanner() {
             metrics={metrics}
             onSave={onSave}
             savedText={savedText}
+            readOnly={readOnly}
           />
         </Col>
       </Row>

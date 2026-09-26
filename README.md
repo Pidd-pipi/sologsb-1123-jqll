@@ -1,6 +1,6 @@
 # sologsb-1123 无人机航拍航线与成果编目台（gbdronemap）
 
-面向航拍作业与测绘内业人员：先按测区规划航线与航点（重叠率、相对航高、地面分辨率），再对飞行产出的成果影像逐张编目（片号、GSD、重叠度、质量）。范围只覆盖**航线规划**与**成果影像编目**本身。纯前端单页应用，数据全部保存在浏览器本地。
+面向航拍作业与测绘内业人员：先按测区规划航线与航点（重叠率、相对航高、地面分辨率），再对飞行产出的成果影像逐张编目（片号、GSD、重叠度、质量），模糊/过曝影像按片号进入补拍清单，航线参数已保存且全部影像合格后通过验收，验收通过的任务可在台账归档。范围只覆盖**航线规划**与**成果影像编目**本身。纯前端单页应用，数据全部保存在浏览器本地。
 
 ## Docker 一键启动（推荐）
 
@@ -67,8 +67,8 @@ sologsb-1123/
         ├── index.css
         ├── vite-env.d.ts
         ├── router/index.tsx
-        ├── types/{mission,waypoint,flightline,imageasset}.ts
-        ├── stores/{mission,waypoint,asset}Store.ts
+        ├── types/{mission,waypoint,flightline,imageasset,reshoot}.ts
+        ├── stores/{mission,waypoint,asset,reshoot}Store.ts
         ├── components/common/{AmapRouteView,OverlapCalcPanel,AssetGrid,MissionCard}.tsx
         ├── hooks/{useMissionFilter,useRouteMetrics}.ts
         ├── pages/{MissionList,RoutePlanner,WaypointTable,AssetCatalog,CameraPreset}.tsx
@@ -82,7 +82,7 @@ sologsb-1123/
 | `/missions` | 任务台账：按测区/机型/飞行日期区间/状态筛选，显示航线数、预计张数与成果条目数 | Mission |
 | `/missions/:id/route` | 航线规划主视图：地图/网格绘制测区与航点折线，右侧参数面板改航高/航速/重叠率，实时回算 GSD、航线间距、预计张数与耗时 | Mission、Waypoint、FlightLine |
 | `/missions/:id/waypoints` | 航点明细：经纬度粘贴导入、批量改高度、上下移与拖拽换序、单点视场预览 | Waypoint |
-| `/missions/:id/assets` | 成果影像编目：卡片格子列出片号/缩略图/GSD/质量，多选标记质量、定位到图、导出清单 | ImageAsset |
+| `/missions/:id/assets` | 成果影像编目：卡片格子列出片号/缩略图/GSD/质量，多选标记质量、定位到图、导出清单；模糊/过曝自动入补拍清单，支持成果验收与补拍清单导出 | ImageAsset、ReshootItem |
 | `/settings/camera` | 相机与传感器参数预设管理，选定预设后带入任务的焦距/像元/传感器 | CameraPreset、Mission |
 
 `/` 重定向到 `/missions`，未匹配路由同样兜底到 `/missions`。
@@ -97,8 +97,16 @@ sologsb-1123/
 
 ## 数据存储说明
 
-- 数据库名 `gbdronemap`，当前结构版本 **v2**（`localStorage['gbdronemap:db-version']` 记录）。
-- 六张表：`missions`（任务）、`waypoints`（航点）、`lines`（航线参数）、`assets`（成果影像条目）、`thumbs`（**缩略图单独建表**，dataUrl）、`presets`（相机预设）。
+- 数据库名 `gbdronemap`，当前结构版本 **v3**（`localStorage['gbdronemap:db-version']` 记录）。
+- 七张表：`missions`（任务）、`waypoints`（航点）、`lines`（航线参数）、`assets`（成果影像条目）、`thumbs`（**缩略图单独建表**，dataUrl）、`presets`（相机预设）、`reshoots`（补拍清单：片号 + 质量原因 + 销项状态）。
 - v1 → v2 迁移：为老任务补 `areaPolygon`/传感器默认值，为航线补 `updatedAt`/`batteryCount`，并新增索引。
+- v2 → v3 迁移：任务新增 `acceptedAt`/`acceptedTotalCount`/`acceptedQualifiedCount`/`archivedAt` 字段与「已验收」状态；新增 `reshoots` 表，并把历史模糊/过曝影像按片号补登进补拍清单（保留质量原因）。
 - 容器无状态、不挂载命名卷；清空站点数据即回到初始示范数据。
-- 首次打开灌入 2 个示范任务、5 个航点、2 条航线参数、6 条成果影像条目（含缩略图）与 3 套相机预设。
+- 首次打开灌入 2 个示范任务、5 个航点、2 条航线参数、6 条成果影像条目（含缩略图）、2 条补拍清单记录（模糊、过曝各 1 条）与 3 套相机预设。
+
+## 验收与归档流程
+
+1. **质量标记联动补拍清单**：在成果页把影像标记为「模糊 / 过曝」后，按片号自动进入补拍清单并保留质量原因；改判「合格」自动销项，外业补拍完成可手动销项，误登条目可移除。补拍清单可单独导出 CSV。
+2. **成果验收**：前置条件为①航线参数已保存（航线规划页保存过一次）②已编目至少 1 张影像③全部影像质量为合格，页面实时列出三项条件，全部满足才能点「通过验收」；验收时固化验收时间、影像总数与合格数。
+3. **台账归档**：任务状态置为「已验收」后，任务台账卡片上出现「归档」按钮，确认弹窗回显验收时间、影像总数与合格数。
+4. **归档只读**：归档后任务状态为「已归档」，航点明细、航线参数、影像质量标记与补拍清单全部只能查看（页面顶部有只读提示），不可再编辑、新增、删除或销项；导出与定位等查看类操作保留。
